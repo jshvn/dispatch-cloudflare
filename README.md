@@ -66,10 +66,10 @@ slash. It lists that repo's workflows and the slots each one runs in, and ends i
 `as const` so a misspelt slot fails to compile:
 
 ```ts
-// schedules/ctan.ts
+// schedules/terraform.ts
 export default {
-  repo: "katoptra/ctan",
-  workflows: [{ workflow: "sync.yml", slots: ["hourly"] }],
+  repo: "jshvn/terraform",
+  workflows: [{ workflow: "drift.yml", slots: ["evening"] }],
 } as const
 ```
 
