@@ -10,10 +10,9 @@ Once, by hand.
 
 1. Create an App under `jshvn` with one permission -- Repository permissions -> Actions ->
    Read and write -- and no webhook.
-2. Install it on the `katoptra` organization with access to all repositories, so a repo
-   created or transferred there is covered without another step, and on `jshvn` for the
-   repos that stay there. The Worker finds each target's installation from its repo name at
-   dispatch time, so there is no installation ID to note.
+2. Install it on `jshvn` with access to the repositories it runs. The Worker finds each
+   target's installation from its repo name at dispatch time, so there is no installation
+   ID to note, and a target under another account only needs the App installed there.
 3. Note the App ID from the App's settings page.
 4. Generate a private key and convert it. GitHub issues PKCS#1; WebCrypto imports PKCS#8
    only.
@@ -85,9 +84,8 @@ To add one:
 
 - Write `schedules/<name>.ts` and add its import to `schedules/index.ts`.
 - `task crons`, if the slot had no target before.
-- Under `katoptra` the App already covers it. Under `jshvn`, add the repo to the App's
-  installation there. A repo the App cannot see fails its step for good with
-  `App is not installed on <owner>/<name>`, which `task inspect` shows.
+- Add the repo to the App's installation. A repo the App cannot see fails its step for
+  good with `App is not installed on <owner>/<name>`, which `task inspect` shows.
 - Check three things in the target's own workflow. Nothing here can, and a target failing
   any of them is dispatched into silence:
   - `workflow_dispatch:` in its `on:` block, or the dispatch 404s.
