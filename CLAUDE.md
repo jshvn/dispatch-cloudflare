@@ -29,9 +29,9 @@ Starts GitHub Actions workflows on a schedule, from a Cloudflare Workflow. GitHu
 - No secrets in the repo. Worker secrets `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY`, set
   with `task secrets`. Repo secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`, for
   deploying.
-- One App, installed per account: on the `katoptra` organization with access to all
-  repositories, and on `jshvn` for the repos there. The installation is resolved from each
-  target's repo name, so nothing in the Worker names an owner.
+- One App, installed on `jshvn` for the repos it runs. The installation is resolved from
+  each target's repo name, so nothing in the Worker names an owner, and a target under
+  another account is one more installation, not a code change.
 - The only network endpoint is `api.github.com`.
 - No cron parser. Cloudflare parses the expressions; this repo looks up strings.
 - One expression per slot, never a multi-hour daily. Cloudflare hands the Worker the same
@@ -73,8 +73,7 @@ Each of these fails silently, or only in production.
   subrequests per owner per firing, none per extra target.
 - **A 404 from the installation lookup means the App is not installed on that repo's
   owner.** The step fails for good with `App is not installed on <owner>/<name>`. A repo
-  created under `katoptra` is covered by that org's all-repositories install; one under
-  `jshvn` has to be added to that installation by hand.
+  has to be added to the installation by hand.
 - **A dispatch names a ref, and an unnamed one is `main`, not the repo's default branch.**
   `dispatchWorkflow` sends `ref: target.ref ?? "main"`; GitHub requires the field, so there is
   no asking it for the default. Every target is on `main`, which is what makes the default

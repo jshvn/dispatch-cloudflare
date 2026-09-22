@@ -243,27 +243,27 @@ describe("Dispatch.run", () => {
   })
 
   it("looks up and mints once for a burst of targets under one owner", async () => {
-    await dispatchTo("katoptra/tlnet", "katoptra/ctan")
+    await dispatchTo("acme/alpha", "acme/beta")
 
     expect(seen()).toEqual({
-      lookedUp: ["katoptra/tlnet"],
-      minted: ["inst-katoptra"],
+      lookedUp: ["acme/alpha"],
+      minted: ["inst-acme"],
       dispatched: [
-        ["tok-inst-katoptra", "katoptra/tlnet"],
-        ["tok-inst-katoptra", "katoptra/ctan"],
+        ["tok-inst-acme", "acme/alpha"],
+        ["tok-inst-acme", "acme/beta"],
       ],
     })
   })
 
   it("keeps two owners on two installations and two tokens", async () => {
-    await dispatchTo("jshvn/ctan", "katoptra/tlnet")
+    await dispatchTo("jshvn/terraform", "acme/alpha")
 
     expect(seen()).toEqual({
-      lookedUp: ["jshvn/ctan", "katoptra/tlnet"],
-      minted: ["inst-jshvn", "inst-katoptra"],
+      lookedUp: ["jshvn/terraform", "acme/alpha"],
+      minted: ["inst-jshvn", "inst-acme"],
       dispatched: [
-        ["tok-inst-jshvn", "jshvn/ctan"],
-        ["tok-inst-katoptra", "katoptra/tlnet"],
+        ["tok-inst-jshvn", "jshvn/terraform"],
+        ["tok-inst-acme", "acme/alpha"],
       ],
     })
   })
@@ -272,14 +272,14 @@ describe("Dispatch.run", () => {
   // to a hard failure. The message has to name the repo, since that is the whole diagnosis.
   it("fails the step for good when the App is not installed on the repo", async () => {
     vi.mocked(github.repoInstallation).mockRejectedValueOnce(
-      new Error("App is not installed on katoptra/new-mirror"),
+      new Error("App is not installed on acme/new-repo"),
     )
     vi.mocked(github.isFatal).mockReturnValueOnce(true)
 
-    const err = await dispatchTo("katoptra/new-mirror").catch((e) => e)
+    const err = await dispatchTo("acme/new-repo").catch((e) => e)
 
     expect(err).toBeInstanceOf(NonRetryableError)
-    expect(err.message).toMatch(/not installed on katoptra\/new-mirror/)
+    expect(err.message).toMatch(/not installed on acme\/new-repo/)
     expect(seen().dispatched).toEqual([])
   })
 })

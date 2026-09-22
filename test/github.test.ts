@@ -72,10 +72,10 @@ const responding = (status: number, body: string | null = null) => {
 describe("repoInstallation", () => {
   it("asks for the repo's installation with the App JWT and returns its id", async () => {
     const { calls, fetch } = responding(200, JSON.stringify({ id: 12345678 }))
-    const id = await repoInstallation("jwt", "katoptra/tlnet", fetch)
+    const id = await repoInstallation("jwt", "acme/alpha", fetch)
 
     expect(id).toBe("12345678")
-    expect(calls[0]?.url).toBe("https://api.github.com/repos/katoptra/tlnet/installation")
+    expect(calls[0]?.url).toBe("https://api.github.com/repos/acme/alpha/installation")
     expect(calls[0]?.init.method).toBeUndefined()
     expect((calls[0]?.init.headers as Record<string, string>).authorization).toBe("Bearer jwt")
   })
@@ -84,33 +84,33 @@ describe("repoInstallation", () => {
   // this repo's owner is not one of them. isFatal makes it a hard failure.
   it("names the repo and fails for good when the App is not installed there", async () => {
     const { fetch } = responding(404, "Not Found")
-    const err = await repoInstallation("jwt", "katoptra/new-mirror", fetch).catch((e) => e)
-    expect(err.message).toMatch(/App is not installed on katoptra\/new-mirror/)
+    const err = await repoInstallation("jwt", "acme/new-repo", fetch).catch((e) => e)
+    expect(err.message).toMatch(/App is not installed on acme\/new-repo/)
     expect(isFatal(err)).toBe(true)
   })
 
   it("leaves a server error retryable", async () => {
     const { fetch } = responding(502, "bad gateway")
-    const err = await repoInstallation("jwt", "katoptra/tlnet", fetch).catch((e) => e)
+    const err = await repoInstallation("jwt", "acme/alpha", fetch).catch((e) => e)
     expect(err.message).toMatch(/502/)
     expect(isFatal(err)).toBe(false)
   })
 
   it("throws when the answer carries no id", async () => {
     const { fetch } = responding(200, "{}")
-    await expect(repoInstallation("jwt", "katoptra/tlnet", fetch)).rejects.toThrow(/no id/)
+    await expect(repoInstallation("jwt", "acme/alpha", fetch)).rejects.toThrow(/no id/)
   })
 })
 
 describe("dispatchWorkflow", () => {
-  const target = { repo: "jshvn/ctan", workflow: "sync.yml" }
+  const target = { repo: "jshvn/terraform", workflow: "sync.yml" }
 
   it("posts to the dispatches endpoint, defaulting the ref to main", async () => {
     const { calls, fetch } = responding(204)
     await dispatchWorkflow("tok", target, fetch)
 
     expect(calls[0]?.url).toBe(
-      "https://api.github.com/repos/jshvn/ctan/actions/workflows/sync.yml/dispatches",
+      "https://api.github.com/repos/jshvn/terraform/actions/workflows/sync.yml/dispatches",
     )
     expect(calls[0]?.init.method).toBe("POST")
     expect(JSON.parse(calls[0]?.init.body as string)).toEqual({ ref: "main", inputs: {} })
