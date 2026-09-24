@@ -54,7 +54,7 @@ Five slots, named in `schedules/index.ts`, each a cron trigger of its own:
 
 | slot        | UTC    | Pacific, winter |
 |-------------|--------|-----------------|
-| `hourly`    | :42    | :42             |
+| `every4h`   | every 4 h from 00:02, then 0-30 min | every 4 h from 16:02, then 0-30 min |
 | `overnight` | 11:17  | 03:17           |
 | `morning`   | 17:17  | 09:17           |
 | `afternoon` | 23:17  | 15:17           |
@@ -91,7 +91,8 @@ To add one:
   - `workflow_dispatch:` in its `on:` block, or the dispatch 404s.
   - a `concurrency` group with `cancel-in-progress: false`, so a retried dispatch queues
     instead of doubling the work.
-  - a healthcheck ping. This repo never learns whether a run passed.
+  - a healthcheck ping, or a line in its `schedules/` file saying what alerts instead.
+    This repo never learns whether a run passed.
 - `task check`, then push to `main`.
 
 To remove one:

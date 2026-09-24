@@ -10,7 +10,8 @@ Starts GitHub Actions workflows on a schedule, from a Cloudflare Workflow. GitHu
 - `schedules/` -- one file per GitHub repo, named for the half of `owner/name` after the
   slash, listing that repo's workflows and the slots each one runs in. Routine changes touch
   only this directory. `schedules/index.ts` imports them all: it holds `SLOTS`, the five
-  named cron expressions, plus the types, the registry and `selectTargets`. A target's cron
+  named cron expressions, `JITTER`, the random wait some slots take before dispatching,
+  plus the types, the registry and `selectTargets`. A target's cron
   is its slot's; the Worker only ever sees the cron.
 - `wrangler.jsonc` -- the same expressions as Worker cron triggers, generated into it by
   `task crons`. Cloudflare parses them.
@@ -24,7 +25,8 @@ Starts GitHub Actions workflows on a schedule, from a Cloudflare Workflow. GitHu
 ## Constraints
 
 - It dispatches. It does not poll, monitor outcomes, or run work itself.
-- Free plan. 3,000 workflow steps a day, one step per target per fire. Polling outcomes
+- Free plan. 3,000 workflow steps a day, one step per target per fire, plus two for a slot
+  in `JITTER` (the drawn delay and its sleep). Polling outcomes
   would cost about 13 steps a run.
 - No secrets in the repo. Worker secrets `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY`, set
   with `task secrets`. Repo secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`, for
@@ -36,7 +38,11 @@ Starts GitHub Actions workflows on a schedule, from a Cloudflare Workflow. GitHu
 - No cron parser. Cloudflare parses the expressions; this repo looks up strings.
 - One expression per slot, never a multi-hour daily. Cloudflare hands the Worker the same
   string for every hour a list expression matches, so a target could not pick one of them;
-  and a trigger Cloudflare drops takes one slot down, not every daily.
+  and a trigger Cloudflare drops takes one slot down, not every daily. `every4h` is the
+  exception that fits: its targets run on every firing, so none has to pick.
+- `JITTER` delays a whole slot by a random wait drawn per firing, inside a step so a
+  restarted instance keeps its draw. The slot waits rather than a target because targets
+  dispatch in turn.
 
 Accepted ceilings: no backfill, no outcome monitoring, the crons copied into
 `wrangler.jsonc` by a generator rather than read from one place, a registry that lists its
@@ -82,7 +88,9 @@ Each of these fails silently, or only in production.
   `ref`, or is renamed. Nothing here can check a ref against the real repo.
 - **This is the targets' only clock, and it never learns whether a run passed.** Their
   workflows carry no `schedule:`. Each workload pings its own healthcheck; that is the only
-  alert, and it is what catches this repo being the thing that broke.
+  alert, and it is what catches this repo being the thing that broke. A workload without
+  one says so in its `schedules/` file -- jshvn/apartments posts failures to an issue and
+  accepts that a run never started goes unnoticed.
 - **The target's `concurrency` group is what makes a retried dispatch safe.** GitHub keeps
   one pending run per group. Without `cancel-in-progress: false` a target can stack runs.
 - **The instance id is the firing: `<scheduledTime>-<slugged cron>`.** In `src/index.ts`,

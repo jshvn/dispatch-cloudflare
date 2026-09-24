@@ -6,13 +6,13 @@
 // are a paid-plan feature: `wrangler deploy` rejects them on the free plan. The cost is this
 // one indirection, and a ceiling of 5 cron expressions per Cloudflare account.
 //
-// It does not watch what happens next. Each workload pings its own healthcheck, which is
-// what alerts when a run fails or never starts -- including when this repo is the thing
-// that broke.
+// It does not watch what happens next. Each workload alerts on its own, most by pinging a
+// healthcheck, which also catches a run that never starts -- including when this repo is
+// the thing that broke. schedules/ says which workloads alert some other way.
 
 import { WorkflowEntrypoint, type WorkflowEvent, type WorkflowStep } from "cloudflare:workers"
 import { NonRetryableError } from "cloudflare:workflows"
-import { selectTargets } from "../schedules"
+import { jitterMinutes, selectTargets } from "../schedules"
 import { appJwt, dispatchWorkflow, installationToken, isFatal, repoInstallation } from "./github"
 
 /** What `scheduled` hands the instance. The cron string is the whole lookup key. */
@@ -72,6 +72,17 @@ export class Dispatch extends WorkflowEntrypoint<Env, Params> {
     // wrangler.jsonc and schedules/ disagree. The tests catch this before deploy; if it
     // reaches production, failing loudly beats a schedule that silently does nothing.
     if (targets.length === 0) throw new Error(`no target in schedules/ claims cron "${cron}"`)
+
+    // A jittered slot waits before dispatching anything. The wait is drawn inside a step so
+    // a restarted instance sleeps what it drew rather than drawing again. A sleep costs no
+    // CPU, and the two steps are all a firing adds.
+    const jitter = jitterMinutes(cron)
+    if (jitter > 0) {
+      const ms = await step.do("pick a delay", RETRY, async () =>
+        Math.floor(Math.random() * jitter * 60_000),
+      )
+      await step.sleep("jitter", ms)
+    }
 
     const tokens = new Map<string, string>()
     const dispatched: string[] = []

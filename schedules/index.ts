@@ -9,8 +9,9 @@
 //   2. It declares a `concurrency` group with `cancel-in-progress: false`, so a dispatch
 //      arriving during a run queues instead of doubling up. GitHub keeps exactly one
 //      pending run per group.
-//   3. The workload pings its own healthcheck. This repo never learns whether a run passed,
-//      so a workload without one is unmonitored.
+//   3. The workload pings its own healthcheck, or its file here says what alerts instead.
+//      This repo never learns whether a run passed, so a workload with neither is
+//      unmonitored.
 //
 // These workflows carry no `schedule:` of their own, so this directory is the only clock
 // they have. A slot lost here is a run that does not happen, and the workload's own
@@ -23,21 +24,25 @@
 // They carry the .ts extension because `task crons` and `task targets` import this file
 // with node's own resolver, which does not guess one. tsconfig.json allows it.
 
+import apartments from "./apartments.ts"
 import terraform from "./terraform.ts"
 
 /**
  * The firing times, each a Cloudflare cron trigger of its own. The expressions are UTC; the
  * names are Pacific, exact in winter and an hour early in summer. The dailies sit at :17
- * and the hourly at :42, so no two slots share a minute and none is on the hour, which
- * GitHub sheds first.
+ * and every4h at :02, so no two slots share a minute and none is on the hour, which GitHub
+ * sheds first.
  *
  * One expression per slot rather than one four-hour daily: five is the free plan's whole
  * budget, but a trigger Cloudflare drops then takes one slot's targets with it and not every
- * daily's. Only a slot some workflow registers in becomes a trigger. Changing an expression
- * here is a trigger change -- `task crons`, then up to 15 minutes before it fires.
+ * daily's. every4h is the one multi-hour expression, and it can be: its targets run on
+ * every firing, so none has to pick one hour out of the list. Only a slot some workflow
+ * registers in becomes a trigger. Changing an expression here is a trigger change --
+ * `task crons`, then up to 15 minutes before it fires.
  */
 export const SLOTS = {
-  hourly: "42 * * * *",
+  /** 00:02, 04:02 ... 20:02 UTC, then JITTER's wait: each run between :02 and :32 */
+  every4h: "2 */4 * * *",
   /** 03:17 PST */
   overnight: "17 11 * * *",
   /** 09:17 PST */
@@ -49,6 +54,19 @@ export const SLOTS = {
 } as const
 
 export type Slot = keyof typeof SLOTS
+
+/**
+ * Minutes a slot waits before dispatching, drawn per firing from [0, n), so its runs start
+ * at a different minute every time instead of reading as a clock. The slot waits, not a
+ * target: targets dispatch in turn, and one target's wait would hold up the rest.
+ */
+export const JITTER: Partial<Record<Slot, number>> = { every4h: 30 }
+
+/** The wait, in minutes, for the slot this cron belongs to; 0 for a slot without one. */
+export const jitterMinutes = (cron: string): number => {
+  const slot = (Object.keys(SLOTS) as Slot[]).find((s) => SLOTS[s] === cron)
+  return slot ? (JITTER[slot] ?? 0) : 0
+}
 
 export type Workflow = {
   /** workflow file name, e.g. "sync.yml" */
@@ -77,7 +95,7 @@ export type Target = Omit<Workflow, "slots"> & { repo: string; cron: string }
 // Annotated here rather than in each repo file, so a leaf stays plain data with no import
 // of its own. A leaf ends in `as const`, which is what keeps its slot names narrow enough to
 // check against SLOTS; a typo in one, or a leaf without it, fails to compile on this line.
-const REPOS: readonly Repo[] = [terraform]
+const REPOS: readonly Repo[] = [terraform, apartments]
 
 export const TARGETS: readonly Target[] = REPOS.flatMap((r) =>
   r.workflows.flatMap(({ slots, ...w }) =>
