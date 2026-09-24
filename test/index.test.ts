@@ -1,7 +1,7 @@
 import type { WorkflowEvent, WorkflowStep } from "cloudflare:workers"
 import { NonRetryableError } from "cloudflare:workflows"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { crons, selectTargets, TARGETS } from "../schedules"
+import { crons, SLOTS, selectTargets, TARGETS } from "../schedules"
 import type { Env, Params } from "../src/index"
 
 // src/index.ts: the two handlers, the instance body and the instance id. Everything
@@ -44,16 +44,22 @@ const recordingEnv = () => {
   return { created, env: env as unknown as Env }
 }
 
-/** A step that runs its callback inline and remembers the step names, in order. */
+/** A step that runs its callback inline and remembers the step names, in order. A sleep
+ * returns at once and is named `sleep <name>`, with its length kept in `slept`. */
 const recordingStep = () => {
   const names: string[] = []
+  const slept: number[] = []
   const step = {
     do: async (name: string, _opts: unknown, fn: () => Promise<unknown>) => {
       names.push(name)
       return fn()
     },
+    sleep: async (name: string, ms: number) => {
+      names.push(`sleep ${name}`)
+      slept.push(ms)
+    },
   }
-  return { names, step: step as unknown as WorkflowStep }
+  return { names, slept, step: step as unknown as WorkflowStep }
 }
 
 const runWith = (payload: Partial<Params>, env: Env, step: WorkflowStep) =>
@@ -222,6 +228,21 @@ describe("Dispatch.run", () => {
     expect(names).toEqual(claiming.map((t) => `dispatch ${t.repo} ${t.workflow}`))
     expect(out.dispatched).toEqual(claiming.map((t) => `${t.repo}/${t.workflow}`))
     expect(vi.mocked(github.dispatchWorkflow)).toHaveBeenCalledTimes(claiming.length)
+  })
+
+  // The wait is the point of a jittered slot. Drawn outside a step, a restarted instance
+  // would draw again; drawn after the dispatch, it would delay nothing.
+  it("waits a drawn delay under the slot's ceiling before dispatching a jittered slot", async () => {
+    const { env } = recordingEnv()
+    const { names, slept, step } = recordingStep()
+    const random = vi.spyOn(Math, "random").mockReturnValue(0.999999)
+
+    await runWith({ cron: SLOTS.every4h, scheduledTime: 0 }, env, step)
+    random.mockRestore()
+
+    const dispatches = selectTargets(SLOTS.every4h).map((t) => `dispatch ${t.repo} ${t.workflow}`)
+    expect(names).toEqual(["pick a delay", "sleep jitter", ...dispatches])
+    expect(slept).toEqual([Math.floor(0.999999 * 30 * 60_000)])
   })
 
   it("mints the token inside the step and keeps it out of the step's output", async () => {

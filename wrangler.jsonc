@@ -18,7 +18,7 @@
   // wrangler requires a default export, and this keeps it off a public URL entirely.
   "workers_dev": false,
   "observability": { "enabled": true },
-  "triggers": { "crons": ["17 5 * * *"] },
+  "triggers": { "crons": ["17 5 * * *", "2 */4 * * *"] },
   "workflows": [
     {
       "name": "dispatch",
