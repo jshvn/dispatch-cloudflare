@@ -3,6 +3,9 @@
 Starts GitHub Actions workflows on a schedule, from a Cloudflare Workflow. GitHub's own
 `schedule:` event delivered 3 of 51 consecutive hourly slots on `jshvn/ctan`. Free plan.
 
+Nothing is registered in `schedules/`, so the Worker carries no cron trigger and never
+fires. jshvn's own repos are scheduled by jshvn/dispatch.
+
 `README.md` is for users. This file is the design.
 
 ## The files
@@ -89,8 +92,7 @@ Each of these fails silently, or only in production.
 - **This is the targets' only clock, and it never learns whether a run passed.** Their
   workflows carry no `schedule:`. Each workload pings its own healthcheck; that is the only
   alert, and it is what catches this repo being the thing that broke. A workload without
-  one says so in its `schedules/` file -- jshvn/apartments posts failures to an issue and
-  accepts that a run never started goes unnoticed.
+  one says so in its `schedules/` file.
 - **The target's `concurrency` group is what makes a retried dispatch safe.** GitHub keeps
   one pending run per group. Without `cancel-in-progress: false` a target can stack runs.
 - **The instance id is the firing: `<scheduledTime>-<slugged cron>`.** In `src/index.ts`,

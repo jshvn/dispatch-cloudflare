@@ -24,9 +24,6 @@
 // They carry the .ts extension because `task crons` and `task targets` import this file
 // with node's own resolver, which does not guess one. tsconfig.json allows it.
 
-import apartments from "./apartments.ts"
-import terraform from "./terraform.ts"
-
 /**
  * The firing times, each a Cloudflare cron trigger of its own. The expressions are UTC; the
  * names are Pacific, exact in winter and an hour early in summer. The dailies sit at :17
@@ -95,7 +92,10 @@ export type Target = Omit<Workflow, "slots"> & { repo: string; cron: string }
 // Annotated here rather than in each repo file, so a leaf stays plain data with no import
 // of its own. A leaf ends in `as const`, which is what keeps its slot names narrow enough to
 // check against SLOTS; a typo in one, or a leaf without it, fails to compile on this line.
-const REPOS: readonly Repo[] = [terraform, apartments]
+//
+// Empty: nothing is scheduled from here, so wrangler.jsonc carries no cron and the Worker
+// never fires. jshvn's own repos are scheduled by jshvn/dispatch.
+const REPOS: readonly Repo[] = []
 
 export const TARGETS: readonly Target[] = REPOS.flatMap((r) =>
   r.workflows.flatMap(({ slots, ...w }) =>

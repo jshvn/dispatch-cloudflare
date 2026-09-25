@@ -1,7 +1,7 @@
 import type { WorkflowEvent, WorkflowStep } from "cloudflare:workers"
 import { NonRetryableError } from "cloudflare:workflows"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { crons, SLOTS, selectTargets, TARGETS } from "../schedules"
+import { SLOTS } from "../schedules"
 import type { Env, Params } from "../src/index"
 
 // src/index.ts: the two handlers, the instance body and the instance id. Everything
@@ -15,8 +15,8 @@ vi.mock("../src/github", () => ({
   isFatal: vi.fn(() => false),
 }))
 
-// The registry stays real; only selectTargets is wrapped, so one test can hand the instance
-// a cron with a shape schedules/ does not have today, such as two targets under one owner.
+// The registry stays real; only selectTargets is wrapped, so each test hands the instance
+// the targets it needs. The real registry is empty.
 vi.mock("../schedules", async (importOriginal) => {
   const real = await importOriginal<typeof import("../schedules")>()
   return { ...real, selectTargets: vi.fn(real.selectTargets) }
@@ -112,8 +112,8 @@ describe("scheduled handler", () => {
 
 // Cloudflare's rule for instance ids: [A-Za-z0-9_-], first character not a dash, 100 max.
 describe("instanceId", () => {
-  it("is legal for every cron this Worker is configured with", () => {
-    for (const cron of crons()) {
+  it("is legal for every cron a slot can configure", () => {
+    for (const cron of Object.values(SLOTS)) {
       const id = instanceId(cron, 1_756_000_000_000)
       expect(id, id).toMatch(/^[a-zA-Z0-9_][a-zA-Z0-9-_]*$/)
       expect(id.length, id).toBeLessThanOrEqual(100)
@@ -132,7 +132,7 @@ describe("instanceId", () => {
   })
 
   // Steps, lists and names are all legal cron and none of their characters are legal in an
-  // id. Only the two expressions configured today are covered above, so this is the guard
+  // id. Only the expressions in SLOTS are covered above, so this is the guard
   // that a cron using any of them stays deployable.
   it("is legal for every character cron can contain", () => {
     const spellings = [
@@ -197,12 +197,17 @@ describe("Dispatch.run", () => {
     dispatched: vi.mocked(github.dispatchWorkflow).mock.calls.map(([tok, t]) => [tok, t.repo]),
   })
 
-  /** Run one firing whose cron is claimed by exactly these repos, each on a sync.yml. */
+  /** Make exactly these repos, each on a sync.yml, the targets claiming cron. */
+  const claim = (cron: string, ...repos: string[]) => {
+    const targets = repos.map((repo) => ({ repo, workflow: "sync.yml", cron }))
+    vi.mocked(schedules.selectTargets).mockReturnValueOnce(targets)
+    return targets
+  }
+
+  /** Run one firing whose cron is claimed by exactly these repos. */
   const dispatchTo = (...repos: string[]) => {
     const cron = "0 5 * * *"
-    vi.mocked(schedules.selectTargets).mockReturnValueOnce(
-      repos.map((repo) => ({ repo, workflow: "sync.yml", cron })),
-    )
+    claim(cron, ...repos)
     return runWith({ cron, scheduledTime: 0 }, recordingEnv().env, recordingStep().step)
   }
 
@@ -220,8 +225,8 @@ describe("Dispatch.run", () => {
   it("runs one step per target and reports what it dispatched", async () => {
     const { env } = recordingEnv()
     const { names, step } = recordingStep()
-    const cron = TARGETS[0]?.cron as string
-    const claiming = selectTargets(cron)
+    const cron = "0 5 * * *"
+    const claiming = claim(cron, "acme/alpha", "acme/beta")
 
     const out = await runWith({ cron, scheduledTime: 0 }, env, step)
 
@@ -236,12 +241,12 @@ describe("Dispatch.run", () => {
     const { env } = recordingEnv()
     const { names, slept, step } = recordingStep()
     const random = vi.spyOn(Math, "random").mockReturnValue(0.999999)
+    claim(SLOTS.every4h, "acme/alpha")
 
     await runWith({ cron: SLOTS.every4h, scheduledTime: 0 }, env, step)
     random.mockRestore()
 
-    const dispatches = selectTargets(SLOTS.every4h).map((t) => `dispatch ${t.repo} ${t.workflow}`)
-    expect(names).toEqual(["pick a delay", "sleep jitter", ...dispatches])
+    expect(names).toEqual(["pick a delay", "sleep jitter", "dispatch acme/alpha sync.yml"])
     expect(slept).toEqual([Math.floor(0.999999 * 30 * 60_000)])
   })
 
@@ -256,7 +261,8 @@ describe("Dispatch.run", () => {
       },
     } as unknown as WorkflowStep
 
-    await runWith({ cron: TARGETS[0]?.cron as string, scheduledTime: 0 }, env, step)
+    claim("0 5 * * *", "acme/alpha")
+    await runWith({ cron: "0 5 * * *", scheduledTime: 0 }, env, step)
 
     // Step output persists for three days. A token reaching it would be a stored credential.
     expect(vi.mocked(github.installationToken)).toHaveBeenCalled()

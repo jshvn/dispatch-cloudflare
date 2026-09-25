@@ -50,6 +50,10 @@ Push to `main` deploys. The checks run on every push without the secret.
 
 ## Changing what runs
 
+Nothing is registered: `schedules/` holds no repo, so `wrangler.jsonc` has no cron trigger
+and the Worker dispatches nothing. jshvn's own repos are scheduled by
+[jshvn/dispatch](https://github.com/jshvn/dispatch).
+
 Five slots, named in `schedules/index.ts`, each a cron trigger of its own:
 
 | slot        | UTC    | Pacific, winter |
