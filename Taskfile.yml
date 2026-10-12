@@ -38,7 +38,7 @@ tasks:
         }
         note() { printf '  %-26s %s\n' '' "$d$1$r"; }
 
-        printf '\n%s   %s\n' "${b}dispatch-cloudflare${r}" "${d}starts GitHub Actions workloads on a schedule, from a Cloudflare Workflow${r}"
+        printf '\n%s   %s\n' "${b}jshvn/dispatch-cloudflare${r}" "${d}starts GitHub Actions workloads on a schedule, from a Cloudflare Workflow${r}"
 
         group read 'looks at schedules/, GitHub and Cloudflare, changes nothing'
         row 'task targets' 'What gets dispatched and when, read from schedules/'
