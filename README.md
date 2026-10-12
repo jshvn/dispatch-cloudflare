@@ -110,13 +110,14 @@ To remove one:
 
 `task` on its own prints the menu.
 
-- `task check` -- everything CI runs: types, format, tests, dry-run deploy.
+- `task check` -- everything CI runs: types, format, tests, dry-run deploy; then the menu
+  against the tasks.
 - `task targets` -- what gets dispatched, and when.
 - `task crons` -- write `wrangler.jsonc`'s triggers from `schedules/`.
 - `task runs` -- recent runs of each target on GitHub.
 - `task instances` -- the Cloudflare side, one instance per cron that fired.
 - `task inspect` -- one instance's steps, retries and errors. `ID=<id>`, default latest.
-- `task format` -- fix formatting in place.
+- `task fmt` -- fix formatting in place.
 - `task clean` -- delete `node_modules`, `.wrangler` and `worker-configuration.d.ts`. The
   next task needing them runs `npm ci` itself, so there is nothing to remember. It keeps
   `.pem` files and `.dev.vars`, which it cannot rebuild, and says so when either is there.

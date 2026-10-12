@@ -5,6 +5,9 @@
 # of their own -- `npx wrangler login` once, or CLOUDFLARE_API_TOKEN in the environment.
 version: '3'
 
+set: [errexit, pipefail]
+silent: true
+
 vars:
   # The Workflow's name in wrangler.jsonc. Wrangler addresses instances by it.
   NAME: dispatch
@@ -16,50 +19,70 @@ vars:
     for (const t of TARGETS) console.log([slot(t.cron), t.cron, t.repo, t.workflow].join("\t"))'
 
 tasks:
-  # The menu. ponytail: hand-maintained listing -- go-task can neither group nor annotate,
-  # so a new task means a line below. `task --list` stays the generated view.
   default:
-    desc: Print the menu - what to run by hand, grouped
-    silent: true
+    desc: Print the menu
+    # ponytail: hand-maintained listing -- go-task can neither group nor annotate, so a new
+    # task means a row below; menu-drift fails until it has one. `task --list` stays the
+    # generated view.
     cmds:
       - |
-        b=$(printf '\033[1m'); c=$(printf '\033[1;36m'); d=$(printf '\033[2m'); r=$(printf '\033[0m')
-        printf '%s\n' \
-          "" \
-          "${b}dispatch${r}   ${d}starts GitHub Actions workloads on a schedule, from a Cloudflare Workflow${r}" \
-          "" \
-          "${c}what runs${r}" \
-          "  task targets      What gets dispatched and when, read from schedules/" \
-          "  task crons        Write wrangler.jsonc's triggers from schedules/" \
-          "                    ${d}run after a slot's expression changes or a slot gains its first target${r}" \
-          "  task runs         Recent runs of each target on GitHub" \
-          "                    ${d}every run should say 'workflow_dispatch'; that is this Worker${r}" \
-          "" \
-          "${c}checks${r}" \
-          "  task check        Everything CI runs: types, format, tests, dry-run deploy" \
-          "  task typecheck    wrangler types && tsc --noEmit" \
-          "  task format       Fix formatting in place ${d}(biome check --write)${r}" \
-          "  task test         vitest -- asserts wrangler.jsonc matches schedules/" \
-          "  task clean        Delete the generated files; the next task rebuilds them" \
-          "                    ${d}node_modules, .wrangler, worker-configuration.d.ts; keeps .pem and .dev.vars${r}" \
-          "" \
-          "${c}cloudflare -- needs wrangler credentials${r}" \
-          "  task dev          Serve locally; /__scheduled?cron=<expr> fires that slot for real" \
-          "                    ${d}needs .dev.vars with the two secrets; it dispatches to GitHub${r}" \
-          "  task deploy       Deploy by hand; pushing to main does this already" \
-          "  task logs         Live logs (wrangler tail)" \
-          "  task instances    Recent Workflow instances" \
-          "  task inspect      One instance's steps, retries and errors ${d}(ID=<id>, default latest)${r}" \
-          "" \
-          "${c}setup -- once, by hand; README.md has the whole procedure${r}" \
-          "  task pkcs8        Convert the GitHub App key to the PKCS#8 WebCrypto imports" \
-          "  task secrets      Set the two Worker secrets on Cloudflare" \
-          "" \
+        b= c= d= r=
+        if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+          b=$(printf '\033[1m'); c=$(printf '\033[1;36m'); d=$(printf '\033[2m'); r=$(printf '\033[0m')
+        fi
+        group() { printf '\n%s   %s\n' "$c$1$r" "$d$2$r"; }
+        row() {
+          if [ ${#1} -le 26 ]; then printf '  %-26s %s\n' "$1" "$2"
+          else printf '  %s\n  %-26s %s\n' "$1" '' "$2"; fi
+          [ -z "${3:-}" ] || note "$3"
+        }
+        note() { printf '  %-26s %s\n' '' "$d$1$r"; }
+
+        printf '\n%s   %s\n' "${b}jshvn/dispatch-cloudflare${r}" "${d}starts GitHub Actions workloads on a schedule, from a Cloudflare Workflow${r}"
+
+        group read 'looks at schedules/, GitHub and Cloudflare, changes nothing'
+        row 'task targets' 'What gets dispatched and when, read from schedules/'
+        row 'task runs' 'Recent runs of each target on GitHub' "every run should say 'workflow_dispatch'; that is this Worker"
+        row 'task logs' 'Live logs (wrangler tail)' 'needs wrangler credentials, as do instances and inspect'
+        row 'task instances' 'Recent Workflow instances'
+        row 'task inspect [ID=<id>]' "One instance's steps, retries and errors" 'ID defaults to the latest'
+
+        group checks 'offline, no credentials'
+        row 'task check' 'Everything CI runs: types, format, tests, dry-run deploy' 'then this menu against the tasks, which CI does not run'
+        row 'task typecheck' 'wrangler types && tsc --noEmit'
+        row 'task test' 'vitest -- asserts wrangler.jsonc matches schedules/'
+        row 'task fmt' 'Fix formatting in place (biome check --write)'
+
+        group build 'writes files in the checkout'
+        row 'task crons' "Write wrangler.jsonc's triggers from schedules/" "run after a slot's expression changes or a slot gains its first target"
+        row 'task pkcs8' 'Convert the GitHub App key to the PKCS#8 WebCrypto imports' 'setup, once, by hand; README.md has the whole procedure'
+        row 'task clean' 'Delete the generated files; the next task rebuilds them' 'node_modules, .wrangler, worker-configuration.d.ts; keeps .pem and .dev.vars'
+
+        group write 'changes Cloudflare or GitHub; needs wrangler credentials'
+        row 'task dev' 'Serve locally; /__scheduled?cron=<expr> fires that slot for real' 'needs .dev.vars with the two secrets; it dispatches to GitHub'
+        row 'task deploy' 'Deploy by hand; pushing to main does this already'
+        row 'task secrets' 'Set the two Worker secrets on Cloudflare' 'setup, once, by hand, after task pkcs8'
+
+        printf '\n%s\n%s\n%s\n%s\n\n' \
           "${d}prove a dispatch for real, in production:${r}" \
           "${d}  npx wrangler workflows trigger dispatch '{\"cron\":\"42 * * * *\",\"scheduledTime\":0}'${r}" \
           "${d}without the JSON the instance has no cron and throws. A newly added cron needs${r}" \
-          "${d}minutes to propagate before its first slot; existing ones fire across deploys.${r}" \
-          ""
+          "${d}minutes to propagate before its first slot; existing ones fire across deploys.${r}"
+
+  # Every public task has a desc and a menu row, and every row names a task. default and
+  # help are the menu itself. Needs task and jq wherever lint runs.
+  menu-drift:
+    internal: true
+    cmds:
+      - |
+        rows=$(grep -oE "row ['\"]task [^ '\"]+" '{{.ROOT_TASKFILE}}' | sed -E "s/^row ['\"]task //" || true)
+        bad=$(task -t '{{.ROOT_TASKFILE}}' --list-all --json --no-status | jq -r --arg rows "$rows" '
+          ($rows | split("\n") | map(select(. != ""))) as $r
+          | [.tasks[] | select(.task != "default" and .task != "help")] as $t
+          | ($t[] | select(.desc == "") | "task \(.task): no desc; describe it or mark it internal"),
+            ($t[] | select(.task | IN($r[]) | not) | "task \(.task): no row in the menu"),
+            ($r[] | select(IN($t[].task) | not) | "row task \(.): no such task")')
+        [ -z "$bad" ] || { printf '%s\n' "$bad" >&2; exit 1; }
 
   # Anything running a binary out of node_modules depends on this, so `task clean` is never
   # a state you have to dig out of by hand. Untouched the failure is `sh: wrangler: command
@@ -76,7 +99,7 @@ tasks:
       - npm ci
 
   check:
-    desc: Everything CI runs - types, format, tests, dry-run deploy
+    desc: Everything CI runs - types, format, tests, dry-run deploy - then the menu against the tasks
     deps: [installed]
     cmds:
       - {task: typecheck}
@@ -84,6 +107,7 @@ tasks:
       - {task: test}
       # Proves wrangler still parses wrangler.jsonc and resolves the Workflow binding.
       - npx wrangler deploy --dry-run
+      - {task: menu-drift}
 
   test:
     desc: vitest - wrangler.jsonc's triggers are what schedules/ generates
@@ -95,14 +119,13 @@ tasks:
     deps: [installed]
     cmds: [npm run typecheck]
 
-  format:
+  fmt:
     desc: Fix formatting in place - biome check --write, no lint rules are enabled
     deps: [installed]
     cmds: [npm run format:fix]
 
   clean:
     desc: Delete node_modules, .wrangler and worker-configuration.d.ts - the next task rebuilds
-    silent: true
     cmds:
       - |
         rm -rf node_modules .wrangler worker-configuration.d.ts
@@ -119,7 +142,6 @@ tasks:
   # it. This is the copy. test/schedules.test.ts is what fails until it has been run.
   crons:
     desc: Write wrangler.jsonc's cron triggers from schedules/ - run when the slots in use change
-    silent: true
     cmds:
       - |
         node -e 'const {readFileSync, writeFileSync} = await import("node:fs");
@@ -137,7 +159,6 @@ tasks:
 
   targets:
     desc: What gets dispatched and when, read from schedules/
-    silent: true
     cmds:
       - |
         printf '%-10s %-14s %-24s %s\n' SLOT CRON REPO WORKFLOW
@@ -147,7 +168,6 @@ tasks:
 
   runs:
     desc: Recent runs of each target on GitHub - workflow_dispatch ones came from here
-    silent: true
     vars:
       LIMIT: '{{.LIMIT | default 10}}'
     cmds:
