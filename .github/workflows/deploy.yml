@@ -36,7 +36,7 @@ jobs:
           export-env: true
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
-          CLOUDFLARE_API_TOKEN: op://ghoorskdilg6sqrmkfief2mq7i/dispatch/cloudflare/token
-          CLOUDFLARE_ACCOUNT_ID: op://ghoorskdilg6sqrmkfief2mq7i/dispatch/cloudflare/account_id
+          CLOUDFLARE_API_TOKEN: op://h76djdgmekqkxh77hiiwse3ara/dispatch/cloudflare/token
+          CLOUDFLARE_ACCOUNT_ID: op://h76djdgmekqkxh77hiiwse3ara/dispatch/cloudflare/account_id
       # Worker secrets are set once with `wrangler secret put` and are not managed from here.
       - run: npx wrangler deploy
