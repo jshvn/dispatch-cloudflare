@@ -133,6 +133,10 @@ generated triggers, it does not write them.
   binding or a stray `console.log`.
 - The dry run proves wrangler still parses `wrangler.jsonc` and resolves the binding.
 
+Updates arrive through Renovate: `renovate.json` extends the shared `jshvn/renovate-config`
+preset, so the npm packages and the actions get one Monday pull request for their minor and
+patch updates and one per major, each assigned to jshvn.
+
 None of that covers the GitHub App contract. Only a real dispatch does:
 
     npx wrangler workflows trigger dispatch '{"cron":"42 * * * *","scheduledTime":0}'
